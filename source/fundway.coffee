@@ -132,7 +132,7 @@ $ ->
        .call(yAxis);
 
   interval_from = (repeat_words) ->
-    regex = /every (\d+) (days?|weeks?|months?|years?)/ig
+    regex = /every (\d+ )?(days?|weeks?|months?|years?)/ig
     matches = regex.exec(repeat_words)
     return null if not matches?
     if matches.length == 3
@@ -142,7 +142,10 @@ $ ->
           when "week", "weeks" then 60 * 60 * 24 * 7
           when "month", "months" then 60 * 60 * 24 * 30
           when "year", "years" then 60 * 60 * 24 * 365
-      factor * parseInt(matches[1])
+      if matches[1]?
+        factor * parseInt(matches[1])
+      else
+        factor
     else
       null
 

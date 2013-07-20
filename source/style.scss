@@ -20,6 +20,22 @@ body {
 }
 
 #table {
+  margin: 40px auto;
+  width: 220px;
+  text-align: center;
+}
+
+#error {
   margin: 0 auto;
-  width: 400px;
+  text-align: center;
+  color: #800;
+  .text {
+    font-size: 1.5em;
+  }
+  .value {
+    font-size: 3em;
+  }
+  strong {
+    font-weight: bold;
+  }
 }

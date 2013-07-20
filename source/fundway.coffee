@@ -1,5 +1,7 @@
 transitionDelay = 500
-maxInterval = 100
+
+maxYears = 10
+endDate = new Date((new Date().getTime()) + (1000 * 60 * 60 * 24 * 365 * maxYears))
 
 $ ->
   margin = 
@@ -28,19 +30,74 @@ $ ->
           .append("g")
           .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
 
-  data = [
-    ["Date", "$", "Repeats"],
-    ["2013-07-19", 6000, ""],
-    ["2013-07-19", -600, "every 1 month"],
-    ["2013-07-19", 400, "every 2 months"],
-  ]
-  $("#table").handsontable
+  existing = localStorage["__fundway_data"]
+  if existing?
+    data = JSON.parse localStorage["__fundway_data"]
+  else
+    data = [
+      ["Date", "$", "Repeats"],
+      ["2013-07-19", 6000, ""],
+      ["2013-07-19", -600, "every 1 month"],
+      ["2013-07-19", 400, "every 2 months"],
+    ]
+
+  isEmptyRow = (instance, row) ->
+    rowData = instance.getData()[row]
+    i = 0
+    ilen = rowData.length
+    
+    while i < ilen
+      return false  if rowData[i] != null
+      i++
+    true
+
+  defaultValueRenderer = (instance, td, row, col, prop, value, cellProperties) ->
+    args = $.extend(true, [], arguments)
+    if args[5] == null and isEmptyRow(instance, row)
+      args[5] = tpl[col]
+      td.style.color = "#999"
+    else
+      td.style.color = ""
+    Handsontable.TextCell.renderer.apply this, args
+  tpl = [ "date", "value", "repeats?" ]
+
+  container = $("#table")
+  container.handsontable 
     data: data
     startRows: 10
     startCols: 3
+    minSpareRows: 1
+    contextMenu: true
     afterChange: (changes, source) ->
       if source == "edit"
         reparse()
+
+    cells: (row, col, prop) ->
+      cellProperties = {}
+      cellProperties.type = renderer: defaultValueRenderer
+      cellProperties
+    
+    beforeChange: (changes) ->
+      instance = container.data("handsontable")
+      ilen = changes.length
+      clen = instance.colCount
+      rowColumnSeen = {}
+      rowsToFill = {}
+      i = 0
+      while i < ilen
+        if changes[i][2] == null and changes[i][3] != null
+          if isEmptyRow(instance, changes[i][0])
+            rowColumnSeen[changes[i][0] + "/" + changes[i][1]] = true
+            rowsToFill[changes[i][0]] = true
+        i++
+      for r of rowsToFill
+        if rowsToFill.hasOwnProperty(r)
+          c = 0
+          while c < clen
+            changes.push [ r, c, null, tpl[c] ]  unless rowColumnSeen[r + "/" + c]
+            c++
+
+
 
   svg.append("g")
      .attr("class", "x axis")
@@ -92,19 +149,26 @@ $ ->
   reparse = ->
     ht = $("#table").handsontable('getInstance')
     data = ht.getData()
+    localStorage["__fundway_data"] = JSON.stringify(data)
     
-    parsed = [[parseDate(row[0]), row[1], interval_from(row[2])] for row in data[1..]][0]
     points = []
 
     # Turn our set of repetitive events into static, concrete data points.
-    for obj in parsed
-      [date, value, interval] = obj
+    for row in data[1...-1]
+      date = parseDate(row[0])
+      value = row[1]
+      interval = interval_from(row[2])
+      continue unless (date? and value?)
       if interval?
-        for i in [0..maxInterval]
+        i = 0
+        ndate = new Date(date.getTime() + (i * interval * 1000))
+        while ndate < endDate
           points.push({
-            date: new Date(date.getTime() + (i * interval * 1000)),
+            date: ndate,
             value: value
           })
+          i += 1
+          ndate = new Date(date.getTime() + (i * interval * 1000))
       else
         points.push({
           date: date,
@@ -121,9 +185,16 @@ $ ->
         epoints.push({date: obj.date, value: value})
       value += parseFloat(obj.value)
       obj.value = value
-      epoints.push(obj)
-      if value < 0
+      unless epoints.length == 0 and obj.value < 0
+        epoints.push(obj)
+      if obj.date > endDate
+        $("#error .value").html("never!")
         break
+      else if obj.value < 0 && epoints.length > 1
+        $("#error .value").html("on #{obj.date}.")
+        break
+      else
+        $("#error .value").html("some time more than #{maxYears} years from now.")
 
     window.updateData epoints
   reparse()
